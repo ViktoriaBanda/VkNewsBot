@@ -1,2 +1,2 @@
 # VkNewsBot
-Bot VK parses three first news from onliner.by and sends their headlines and links to VK user. Bot works from the VKcommunity.
+Bot VK parses three first news from onliner.by and sends to VK user their headlines and links. Bot works from the VKcommunity.

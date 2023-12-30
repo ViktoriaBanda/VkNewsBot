@@ -13,6 +13,10 @@ namespace Vk
         private const int WAITING_TIME = 1800000;
         private const int RECEIVER_ID = 55132430;
         private const int NEWS_COUNT = 3;
+
+        private const string newsXPath = "//*[@id=\"widget-{0}-1\"]/div/a[1]/h3/span";
+        private const string linkXPath = "//*[@id=\"widget-{0}-1\"]/div/a";
+        
         private static readonly string _newsUrl = "https://www.onliner.by/";
 
         static void Main(string[] args)
@@ -72,7 +76,7 @@ namespace Vk
                 {
                     ParseNews(htmlDoc, news, index, numberOfNews, i);
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
                     end++;
                     continue;
@@ -90,38 +94,39 @@ namespace Vk
 
         private static void ParseNews(HtmlDocument htmlDoc, List<string> news, int index, int numberOfNews, int i)
         {
-            news[index] = $"{numberOfNews}. " +
-                          htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i + 1}-1\"]/a[1]/h3/span")
-                              .InnerHtml;
-            news[index] = news[index].Replace("&laquo;", "\"");
-            news[index] = news[index].Replace("&raquo;", "\"");
+            var xpath = string.Format(newsXPath, i + 1);
+            var selectedNode = htmlDoc.DocumentNode.SelectSingleNode(xpath);
+
+            if (selectedNode == null)
+            {
+                return;
+            }
+            var innerHtml = selectedNode.InnerHtml;
+            news.Add($"{numberOfNews}. {innerHtml}");
+
+            news[index] = ReplaceSpecialCharacters(news[index]);
+        }
+
+        private static string ReplaceSpecialCharacters(string input)
+        {
+            input = input.Replace("&laquo;", "\"")
+                .Replace("&raquo;", "\"");
+
             var euro = (char)8364;
-            news[index] = news[index].Replace("&euro;", euro.ToString());
+            return input.Replace("&euro;", euro.ToString());
         }
 
         private static void AddLink(IList<string> news, int index, int i, HtmlDocument htmlDoc)
         {
-            var tempLink = htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i}-1\"]/a[1]").OuterHtml;
+            var tempLinkNode = htmlDoc.DocumentNode.SelectSingleNode(string.Format(linkXPath, i));
 
-            var link = "";
-            for (var j = 1; j < tempLink.Length; j++)
+            if (tempLinkNode == null)
             {
-                if (tempLink[j - 1] != '"')
-                {
-                    continue;
-                }
-                while (true)
-                {
-                    if (tempLink[j] == '"')
-                    {
-                        news[index] = link;
-                        return;
-                    }
-
-                    link += tempLink[j];
-                    j++;
-                }
+                return;
             }
+            
+            var link = tempLinkNode.GetAttributeValue("href", "");
+            news.Add(link);
         }
     }
 }

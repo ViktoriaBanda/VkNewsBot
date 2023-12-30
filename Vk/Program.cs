@@ -1,39 +1,42 @@
 ﻿using System;
+using System.Collections.Generic;
 using HtmlAgilityPack;
-using Microsoft.Extensions.DependencyInjection;
 using VkNet;
 using VkNet.Model;
 using VkNet.Model.RequestParams;
-using VkNet.AudioBypassService.Extensions;
 using System.Threading;
 
 namespace Vk
 {
     class Program
     {
-       
+        private const int WAITING_TIME = 1800000;
+        private const int RECEIVER_ID = 55132430;
+        private const int NEWS_COUNT = 3;
+        private static readonly string _newsUrl = "https://www.onliner.by/";
+
         static void Main(string[] args)
         {
-        //цикл для того, чтобы новости кидались каждые 30 минут
             while (true)
             {
-                //создали VkApi
                 var api = CreateVkApi();
 
                 var message = GetMessage();
-
                 SendMessage(api, message);
 
-                Thread.Sleep(1800000);
+                Thread.Sleep(WAITING_TIME);
             }
         }
 
         private static VkApi CreateVkApi()
         {
             var api = new VkApi();
-            //Авторизация по токену (токен получаем вконтакте)
-            api.Authorize(new ApiAuthParams() { AccessToken = UserSettings.AccessToken });
-            
+            // Авторизация по токену (токен получаем вконтакте)
+            api.Authorize(new ApiAuthParams
+            {
+                AccessToken = UserSettings.AccessToken
+            });
+
             return api;
         }
 
@@ -41,8 +44,7 @@ namespace Vk
         {
             api.Messages.Send(new MessagesSendParams
             {
-                //Id кому отправляем новости (вписан мой)
-                PeerId = 55132430,
+                PeerId = RECEIVER_ID,
                 Message = message,
                 RandomId = new Random().Next()
             });
@@ -50,43 +52,25 @@ namespace Vk
 
         private static string GetMessage()
         {
-            //сохраняем адрес странички:
-            var html = @"https://www.onliner.by/";
-            
-            //создаем объект HtmlWeb:
             var web = new HtmlWeb();
-            
-            //загружаем страничкуц
-            var htmlDoc = web.Load(html);
-            
-            //получаем новости:
+            var htmlDoc = web.Load(_newsUrl);
             var news = GetNews(htmlDoc);
-            
-            //сообщение для отправки вк
+
             var message = "Свежие новости: \n" + string.Join("\n", news);
-            
             return message;
         }
 
-        private static string[] GetNews(HtmlDocument htmlDoc)
+        private static List<string> GetNews(HtmlDocument htmlDoc)
         {
-            //массив новостей
-            var news = new string[6];
-            var end = 3;
+            var news = new List<string>();
+            var end = NEWS_COUNT;
             var numberOfNews = 1;
             var index = 0;
-            for (int i = 0; i < end; i++)
+            for (var i = 0; i < end; i++)
             {
                 try
                 {
-                    //XPath названия новости:
-                    news[index] = $"{numberOfNews}. " +
-                                  htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i + 1}-1\"]/a[1]/h3/span")
-                                      .InnerHtml;
-                    news[index] = news[index].Replace("&laquo;", "\"");
-                    news[index] = news[index].Replace("&raquo;", "\"");
-                    var euro = (char) 8364;
-                    news[index] = news[index].Replace("&euro;", euro.ToString());
+                    ParseNews(htmlDoc, news, index, numberOfNews, i);
                 }
                 catch (Exception)
                 {
@@ -95,35 +79,47 @@ namespace Vk
                 }
 
                 index++;
-                
-                //добавляем ссылку на новость
+
                 AddLink(news, index, i + 1, htmlDoc);
                 index++;
                 numberOfNews++;
             }
+
             return news;
         }
 
-        private static void AddLink(string[]news, int index, int i, HtmlDocument htmlDoc)
+        private static void ParseNews(HtmlDocument htmlDoc, List<string> news, int index, int numberOfNews, int i)
         {
-            var tempLink= htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i}-1\"]/a[1]").OuterHtml;
+            news[index] = $"{numberOfNews}. " +
+                          htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i + 1}-1\"]/a[1]/h3/span")
+                              .InnerHtml;
+            news[index] = news[index].Replace("&laquo;", "\"");
+            news[index] = news[index].Replace("&raquo;", "\"");
+            var euro = (char)8364;
+            news[index] = news[index].Replace("&euro;", euro.ToString());
+        }
+
+        private static void AddLink(IList<string> news, int index, int i, HtmlDocument htmlDoc)
+        {
+            var tempLink = htmlDoc.DocumentNode.SelectSingleNode($"//*[@id=\"widget-{i}-1\"]/a[1]").OuterHtml;
 
             var link = "";
             for (var j = 1; j < tempLink.Length; j++)
             {
-                if (tempLink[j - 1] == '"')
+                if (tempLink[j - 1] != '"')
                 {
-                    while (true)
+                    continue;
+                }
+                while (true)
+                {
+                    if (tempLink[j] == '"')
                     {
-                        if (tempLink[j] == '"')
-                        {
-                            news[index] = link;
-                            return;
-                        }
-
-                        link += tempLink[j];
-                        j++;
+                        news[index] = link;
+                        return;
                     }
+
+                    link += tempLink[j];
+                    j++;
                 }
             }
         }
